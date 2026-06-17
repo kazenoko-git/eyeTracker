@@ -4,14 +4,22 @@ import numpy as np
 
 class LandmarkExtractor:
     def __init__(self):
-        self.mp_face_mesh = mp.solutions.face_mesh
-        # refine_landmarks=True is required to get the iris landmarks
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True, 
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+        # We use the new MediaPipe Tasks API for face landmarks
+        BaseOptions = mp.tasks.BaseOptions
+        FaceLandmarker = mp.tasks.vision.FaceLandmarker
+        FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
+        VisionRunningMode = mp.tasks.vision.RunningMode
+        
+        # We must provide the path to the downloaded model
+        options = FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path='face_landmarker.task'),
+            running_mode=VisionRunningMode.IMAGE,
+            num_faces=1,
+            output_face_blendshapes=False,
+            output_facial_transformation_matrixes=False
         )
+        
+        self.landmarker = FaceLandmarker.create_from_options(options)
         
         # Right eye indices (MediaPipe's right, which is the left side of the image if mirrored)
         self.RIGHT_EYE = [33, 160, 158, 133, 153, 144]
@@ -24,7 +32,8 @@ class LandmarkExtractor:
     def process_frame(self, frame):
         # Convert BGR to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.face_mesh.process(rgb_frame)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        results = self.landmarker.detect(mp_image)
         return results
         
     def get_ear(self, landmarks, eye_indices, img_w, img_h):
@@ -82,10 +91,10 @@ class LandmarkExtractor:
         img_h, img_w = frame.shape[:2]
         results = self.process_frame(frame)
         
-        if not results.multi_face_landmarks:
+        if not results.face_landmarks:
             return None
             
-        landmarks = results.multi_face_landmarks[0].landmark
+        landmarks = results.face_landmarks[0]
         
         right_ear = self.get_ear(landmarks, self.RIGHT_EYE, img_w, img_h)
         left_ear = self.get_ear(landmarks, self.LEFT_EYE, img_w, img_h)
