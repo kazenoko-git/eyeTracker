@@ -15,25 +15,42 @@ class MouseController:
         
         # Intent Triggers
         self.midas_triggered = False
+        self.key_pressed = False
+        self.last_midas_time = 0
         
         # Start background listener for the physical modifier key (Midas Touch)
-        self.listener = keyboard.Listener(on_press=self.on_press)
+        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         self.listener.start()
 
     def on_press(self, key):
         """Callback for physical key presses to execute 'Midas Touch' click."""
         try:
+            if not self.key_pressed:
+                if hasattr(key, 'char') and key.char == config.MIDAS_KEY:
+                    self.midas_triggered = True
+                    self.key_pressed = True
+                elif key == keyboard.Key.space and config.MIDAS_KEY == 'space':
+                    self.midas_triggered = True
+                    self.key_pressed = True
+        except Exception:
+            pass
+
+    def on_release(self, key):
+        try:
             if hasattr(key, 'char') and key.char == config.MIDAS_KEY:
-                self.midas_triggered = True
+                self.key_pressed = False
             elif key == keyboard.Key.space and config.MIDAS_KEY == 'space':
-                self.midas_triggered = True
+                self.key_pressed = False
         except Exception:
             pass
 
     def move_mouse(self, x, y):
         """Moves the OS cursor to the specified screen coordinates."""
-        # Using pyautogui's moveTo
-        pyautogui.moveTo(x, y)
+        try:
+            pyautogui.moveTo(x, y)
+        except Exception as e:
+            # Fails if Accessibility permissions are not granted
+            pass
 
     def check_dwell_click(self, x, y):
         """Triggers a left-click if gaze stays within a small radius for a threshold duration."""
@@ -43,8 +60,11 @@ class MouseController:
             if self.dwell_start_time is None:
                 self.dwell_start_time = time.time()
             elif (time.time() - self.dwell_start_time) * 1000 > config.DWELL_TIME_MS:
-                pyautogui.click()
-                print("Dwell Click Executed!")
+                try:
+                    pyautogui.click()
+                    print("Dwell Click Executed!")
+                except Exception:
+                    print("Failed to click! Enable Accessibility permissions.")
                 # Reset dwell timer to prevent spamming clicks
                 self.dwell_start_time = None 
         else:
@@ -55,8 +75,13 @@ class MouseController:
     def check_midas_click(self):
         """Triggers a click if the physical modifier key was pressed."""
         if self.midas_triggered:
-            pyautogui.click()
-            print("Midas Touch Click Executed!")
+            if time.time() - self.last_midas_time > 0.5:
+                try:
+                    pyautogui.click()
+                    print("Midas Touch Click Executed!")
+                except Exception:
+                    print("Failed to click! Enable Accessibility permissions.")
+                self.last_midas_time = time.time()
             self.midas_triggered = False
 
     def check_wink_click(self, ear):
@@ -64,8 +89,11 @@ class MouseController:
         if ear < config.EAR_THRESHOLD_BLINK:
             self.wink_frames += 1
             if self.wink_frames == config.EAR_CONSEC_FRAMES_WINK:
-                pyautogui.click()
-                print("Prolonged Wink Click Executed!")
+                try:
+                    pyautogui.click()
+                    print("Prolonged Wink Click Executed!")
+                except Exception:
+                    print("Failed to click! Enable Accessibility permissions.")
         else:
             self.wink_frames = 0
             
